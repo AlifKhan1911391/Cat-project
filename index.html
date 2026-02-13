@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Be My Valentine?</title>
+    <style>
+        /* RESET */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #ffdde1;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            text-align: center;
+            -webkit-tap-highlight-color: transparent; 
+            transition: background-color 0.5s ease;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100vh;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #d6336c;
+            font-size: 2rem;
+            margin-bottom: 40px;
+            z-index: 10;
+        }
+
+        .buttons {
+            display: flex;
+            flex-direction: row;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            width: 100%;
+            height: 100px; 
+            position: relative;
+        }
+
+        button {
+            width: 140px; 
+            height: 60px;
+            font-size: 1.3rem;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            font-weight: bold;
+            display: flex; 
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+        }
+
+        #yesBtn {
+            background-color: #28a745;
+            color: white;
+            transition: transform 0.3s ease; 
+        }
+
+        #noBtn {
+            background-color: #dc3545;
+            color: white;
+            position: relative; 
+            /* THE SMOOTH DODGE ANIMATION */
+            transition: all 0.3s ease-out; 
+        }
+
+        /* HIDDEN SCREENS */
+        #successScreen, #catScreen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: transparent; 
+            z-index: 100;
+        }
+
+        .gallery {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            padding: 10px;
+            max-width: 1000px;
+        }
+
+        .gallery img {
+            width: 140px;
+            height: 190px;
+            object-fit: cover;
+            border-radius: 10px;
+            border: 3px solid white;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        #catImg {
+            width: 90%;
+            max-width: 400px;
+            border-radius: 15px;
+            border: 5px solid red;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="mainScreen" class="container">
+        <h1>Will you be my valentine? 🌹</h1>
+        <div class="buttons">
+            <button id="yesBtn">Yes</button>
+            <button id="noBtn">No</button>
+        </div>
+    </div>
+
+    <div id="successScreen">
+        <h1>Good girl ❤️</h1>
+        <div class="gallery">
+            <!-- Cat images will be injected dynamically; fallback placeholders removed -->
+            <img src="" alt="cat 1">
+            <img src="" alt="cat 2">
+            <img src="" alt="cat 3">
+            <img src="" alt="cat 4">
+            <img src="" alt="cat 5">
+        </div>
+    </div>
+
+    <div id="catScreen">
+        <h1 style="color: red;">Stop messing with me! 😾</h1>
+        <img id="catImg" src="cat.png" alt="Cat with Gun">
+    </div>
+
+    <script>
+        const noBtn = document.getElementById('noBtn');
+        const yesBtn = document.getElementById('yesBtn');
+        const mainScreen = document.getElementById('mainScreen');
+        const successScreen = document.getElementById('successScreen');
+        const catScreen = document.getElementById('catScreen');
+        const catImg = document.getElementById('catImg');
+        const galleryImgs = document.querySelectorAll('#successScreen .gallery img');
+        
+        let timerRunning = false;
+        let timerId = null;
+        let mobileClickCount = 0; 
+
+        // --- CAT API HELPER: fetch 5 random cat images ---
+        async function fetchFiveRandomCats() {
+            try {
+                const response = await fetch('https://api.thecatapi.com/v1/images/search?limit=5');
+                if (!response.ok) throw new Error('API error');
+                const data = await response.json();
+                // data is an array of objects with 'url' property
+                return data.map(cat => cat.url);
+            } catch (error) {
+                console.warn('Failed to fetch cat images, using fallback placeholders.', error);
+                // Return empty array -> gallery will show nothing, but we can optionally set some generic
+                return [];
+            }
+        }
+
+        // Helper to detect mobile
+        function isMobile() {
+            return window.innerWidth <= 768;
+        }
+
+        // --- INTERACTION LOGIC ---
+        function handleInteraction(e) {
+            
+            if (isMobile()) {
+                // === MOBILE: CLICK TO SHRINK/GROW ===
+                if (e.type === 'mouseenter') return; // Ignore hover on mobile
+                e.preventDefault(); 
+                
+                mobileClickCount++;
+
+                if (mobileClickCount >= 3) {
+                    showCat();
+                } else {
+                    // Resize Buttons
+                    const scaleYes = 1 + (mobileClickCount * 0.4); 
+                    const scaleNo = 1 - (mobileClickCount * 0.2);
+                    yesBtn.style.transform = `scale(${scaleYes})`;
+                    noBtn.style.transform = `scale(${scaleNo})`;
+                }
+
+            } else {
+                // === PC: SMOOTH DODGE ===
+                // Only move on hover, OR click if they somehow catch it
+                moveButtonSmoothly();
+            }
+        }
+
+        // --- PC SMOOTH MOVEMENT MATH ---
+        function moveButtonSmoothly() {
+            // 1. Start 10s Timer
+            if (!timerRunning) {
+                timerRunning = true;
+                timerId = setTimeout(() => { showCat(); }, 10000); 
+            }
+
+            // 2. Make Fixed if not already
+            if (noBtn.style.position !== 'fixed') {
+                const rect = noBtn.getBoundingClientRect();
+                noBtn.style.position = 'fixed';
+                noBtn.style.left = rect.left + 'px';
+                noBtn.style.top = rect.top + 'px';
+            }
+
+            // 3. Get Current Position
+            const currentLeft = parseFloat(noBtn.style.left) || 0;
+            const currentTop = parseFloat(noBtn.style.top) || 0;
+
+            // 4. Calculate a "Jump" (Delta) instead of random teleport
+            const minJump = 100; 
+            const maxJump = 250; 
+            
+            const dirX = Math.random() < 0.5 ? -1 : 1;
+            const dirY = Math.random() < 0.5 ? -1 : 1;
+
+            let moveX = (minJump + Math.random() * (maxJump - minJump)) * dirX;
+            let moveY = (minJump + Math.random() * (maxJump - minJump)) * dirY;
+
+            let newX = currentLeft + moveX;
+            let newY = currentTop + moveY;
+
+            // 5. Boundary Checks (Bounce off walls)
+            const btnWidth = noBtn.offsetWidth;
+            const btnHeight = noBtn.offsetHeight;
+            const pad = 20; 
+
+            // If goes off left/right
+            if (newX < pad) newX = window.innerWidth - btnWidth - pad - (Math.random()*50);
+            if (newX + btnWidth > window.innerWidth - pad) newX = pad + (Math.random()*50);
+            
+            // If goes off top/bottom
+            if (newY < pad) newY = window.innerHeight - btnHeight - pad - (Math.random()*50);
+            if (newY + btnHeight > window.innerHeight - pad) newY = pad + (Math.random()*50);
+
+            // 6. Apply with CSS transition
+            noBtn.style.left = newX + 'px';
+            noBtn.style.top = newY + 'px';
+        }
+
+        // Listeners
+        noBtn.addEventListener('mouseenter', handleInteraction); // PC Hover
+        noBtn.addEventListener('click', handleInteraction);      // PC Click / Mobile Tap
+        noBtn.addEventListener('touchstart', handleInteraction); // Mobile Tap
+
+        // Yes Button handler – fetch 5 random cats and display gallery
+        yesBtn.addEventListener('click', async () => {
+            if (timerId) clearTimeout(timerId);
+            
+            // Fetch 5 random cat images from API
+            const catUrls = await fetchFiveRandomCats();
+            
+            // Update gallery images (up to 5, if less fill with empty)
+            galleryImgs.forEach((img, index) => {
+                if (index < catUrls.length && catUrls[index]) {
+                    img.src = catUrls[index];
+                } else {
+                    // If API fails, use a cute placeholder or leave empty (but we want cats, so use a generic)
+                    img.src = 'https://cdn2.thecatapi.com/images/77p.jpg'; // fallback single cat
+                }
+                // Remove any onerror to avoid fallback to local jpg
+                img.onerror = null; 
+            });
+            
+            mainScreen.style.display = 'none';
+            successScreen.style.display = 'flex';
+            document.body.style.backgroundColor = "#ffcdd2";
+        });
+
+        // Show Cat – now uses the GitHub image
+        function showCat() {
+            if (successScreen.style.display !== 'flex') {
+                // Use the GitHub image instead of cat.png
+                catImg.src = 'https://raw.githubusercontent.com/AlifKhan1911391/Cat-project/refs/heads/main/Screenshot_20260214-000757.jpg';
+                // Add a fallback in case the GitHub image fails (still show something)
+                catImg.onerror = () => {
+                    catImg.src = 'https://cdn2.thecatapi.com/images/77p.jpg'; // backup random cat
+                };
+                
+                mainScreen.style.display = 'none';
+                catScreen.style.display = 'flex';
+                document.body.style.backgroundColor = "black";
+                setTimeout(() => { resetGame(); }, 5000);
+            }
+        }
+
+        // Reset
+        function resetGame() {
+            catScreen.style.display = 'none';
+            mainScreen.style.display = 'flex';
+            document.body.style.backgroundColor = "#ffdde1";
+
+            timerRunning = false;
+            mobileClickCount = 0;
+            if (timerId) clearTimeout(timerId);
+
+            // Reset Positions & Scales
+            noBtn.style.position = 'relative';
+            noBtn.style.left = 'auto';
+            noBtn.style.top = 'auto';
+            noBtn.style.transform = 'scale(1)';
+            yesBtn.style.transform = 'scale(1)';
+            
+            // Clear gallery images so they don't show previous cats
+            galleryImgs.forEach(img => img.src = '');
+        }
+    </script>
+</body>
+</html>
